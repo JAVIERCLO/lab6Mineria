@@ -90,3 +90,41 @@ Capacidad explicativa (R
 Error Promedio (MAE): El Error Absoluto Medio se situó en 450.13. En términos prácticos, esto indica que, en promedio, las predicciones del modelo se desvían por alrededor de $450 dólares del precio real de la propiedad.
 
 Sensibilidad a valores atípicos (RMSE): El RMSE en el conjunto de prueba fue de 2456.06. El hecho de que el RMSE sea significativamente más alto que el MAE nos indica que el modelo está cometiendo errores de gran magnitud en ciertas observaciones. Dado el contexto de Airbnb, es muy probable que el modelo tenga dificultades para predecir precios de alojamientos atípicos o de ultra lujo, ya que KNN promedia el valor de sus "vecinos" locales y no extrapola bien hacia valores extremos aislados.
+
+```{r modelo de clasificacion}
+cuts <- quantile(train$price, probs = c(0.33, 0.66), na.rm = TRUE)
+
+train$price_cat <- cut(train$price,
+                       breaks = c(-Inf, cuts[1], cuts[2], Inf),
+                       labels = c("Economica", "Intermedia", "Cara"))
+
+test$price_cat <- cut(test$price,
+                      breaks = c(-Inf, cuts[1], cuts[2], Inf),
+                      labels = c("Economica", "Intermedia", "Cara"))
+
+set.seed(123)
+
+modelo_knn_clas <- train(
+  price_cat ~ accommodates + bathrooms_num + bedrooms + beds +
+    host_response_rate + host_acceptance_rate +
+    calculated_host_listings_count + number_of_reviews +
+    reviews_per_month + review_scores_rating +
+    minimum_nights + availability_365 +
+    room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data = train,
+  method = "knn",
+  preProcess = c("center", "scale"),
+  trControl = trainControl(method = "cv", number = 5),
+  tuneLength = 5,
+  na.action = na.omit
+)
+
+print(modelo_knn_clas)
+
+pred_knn_clas <- predict(modelo_knn_clas, newdata = test)
+
+matriz_knn <- confusionMatrix(pred_knn_clas, test$price_cat)
+
+matriz_knn
+```
+
