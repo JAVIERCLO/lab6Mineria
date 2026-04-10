@@ -1,0 +1,76 @@
+---
+title: "Laboratorio 6 - KNN"
+author: "Genser, Javier, Samuel"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup}
+# Cargar los datos
+load("listings_modificado.RData")
+
+# Asegurar la partición de datos
+library(caret)
+set.seed(123)
+
+
+muestra_idx <- sample(1:nrow(listings), size = 10000)
+muestra     <- listings[muestra_idx, ]
+
+n         <- nrow(muestra)
+train_idx <- sample(1:n, size = 0.7 * n)
+train     <- muestra[train_idx, ]
+test      <- muestra[-train_idx, ]
+
+
+
+# Cargar librería necesaria
+library(caret)
+
+# 1. Asegurar la partición de datos de las entregas anteriores
+set.seed(123)
+muestra_idx <- sample(1:nrow(listings), size = 10000)
+muestra     <- listings[muestra_idx, ]
+
+n         <- nrow(muestra)
+train_idx <- sample(1:n, size = 0.7 * n)
+train     <- muestra[train_idx, ]
+test      <- muestra[-train_idx, ]
+
+# 2. Entrenar el modelo de Regresión KNN
+set.seed(123)
+modelo_knn_reg <- train(
+  price ~ accommodates + bathrooms_num + bedrooms + beds +
+    host_response_rate + host_acceptance_rate +
+    calculated_host_listings_count + number_of_reviews +
+    reviews_per_month + review_scores_rating +
+    minimum_nights + availability_365 +
+    room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data = train,
+  method = "knn",
+  # Normalización VITAL para medir distancias en KNN
+  preProcess = c("center", "scale"), 
+  # Validación cruzada (5-fold) para encontrar el mejor número de vecinos (k)
+  trControl = trainControl(method = "cv", number = 5), 
+  tuneLength = 5, # Probará 5 valores distintos de K automáticamente
+  na.action = na.omit 
+)
+
+
+print(modelo_knn_reg)
+
+# 3. Predicción con el modelo usando el conjunto de prueba
+pred_knn <- predict(modelo_knn_reg, newdata = test)
+
+# 4. Obtener las métricas de evaluación
+
+eval_data <- data.frame(pred = pred_knn, obs = test$price)
+eval_data <- na.omit(eval_data)
+
+resultados_knn <- postResample(pred = eval_data$pred, obs = eval_data$obs)
+
+cat("\n--- RESULTADOS DEL MODELO KNN (REGRESIÓN) ---\n")
+print(resultados_knn)
+
+```
