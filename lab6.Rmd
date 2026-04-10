@@ -74,3 +74,19 @@ cat("\n--- RESULTADOS DEL MODELO KNN (REGRESIÓN) ---\n")
 print(resultados_knn)
 
 ```
+
+Análisis de Resultados del Modelo KNN (Regresión)
+
+El modelo de regresión de K-Nearest Neighbors demostró un rendimiento moderadamente bueno para predecir el precio de los alojamientos, basándose en los siguientes resultados:
+
+Selección del hiperparámetro óptimo: Durante el entrenamiento con validación cruzada (5-fold), el algoritmo evaluó distintos valores de vecindad y determinó que el modelo óptimo se alcanza con k=7 vecinos, ya que fue el punto donde se minimizó el error cuadrático medio (RMSE = 2897.67).
+
+Capacidad explicativa (R 
+2
+ ): Al evaluar el modelo final contra el conjunto de prueba (datos no vistos), se obtuvo un R 
+2
+  de 0.6191. Esto significa que las variables predictoras seleccionadas y el cálculo de distancias de KNN logran explicar aproximadamente el 61.91% de la variabilidad en los precios de los Airbnb.
+
+Error Promedio (MAE): El Error Absoluto Medio se situó en 450.13. En términos prácticos, esto indica que, en promedio, las predicciones del modelo se desvían por alrededor de $450 dólares del precio real de la propiedad.
+
+Sensibilidad a valores atípicos (RMSE): El RMSE en el conjunto de prueba fue de 2456.06. El hecho de que el RMSE sea significativamente más alto que el MAE nos indica que el modelo está cometiendo errores de gran magnitud en ciertas observaciones. Dado el contexto de Airbnb, es muy probable que el modelo tenga dificultades para predecir precios de alojamientos atípicos o de ultra lujo, ya que KNN promedia el valor de sus "vecinos" locales y no extrapola bien hacia valores extremos aislados.
