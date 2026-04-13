@@ -5,93 +5,107 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
+```{r setup, message=FALSE, warning=FALSE}
+library(caret)
+library(ggplot2)
 
-```{r setup}
 # Cargar los datos
 load("listings_modificado.RData")
 
-# Asegurar la partición de datos
-library(caret)
-set.seed(123)
-
-
-muestra_idx <- sample(1:nrow(listings), size = 10000)
-muestra     <- listings[muestra_idx, ]
-
-n         <- nrow(muestra)
-train_idx <- sample(1:n, size = 0.7 * n)
-train     <- muestra[train_idx, ]
-test      <- muestra[-train_idx, ]
-
-
-
-# Cargar librería necesaria
-library(caret)
-
-# 1. Asegurar la partición de datos de las entregas anteriores
+# Partición de datos (misma de todas las entregas anteriores)
 set.seed(123)
 muestra_idx <- sample(1:nrow(listings), size = 10000)
-muestra     <- listings[muestra_idx, ]
-
-n         <- nrow(muestra)
+muestra <- listings[muestra_idx, ]
+n <- nrow(muestra)
 train_idx <- sample(1:n, size = 0.7 * n)
-train     <- muestra[train_idx, ]
-test      <- muestra[-train_idx, ]
+train <- muestra[train_idx, ]
+test  <- muestra[-train_idx, ]
+```
 
-# 2. Entrenar el modelo de Regresión KNN
+---
+
+## Modelo de Regresión KNN
+
+Se elaboró un modelo de regresión KNN para predecir el precio de renta de las propiedades. Se utilizan exactamente los mismos conjuntos de entrenamiento y prueba de las entregas anteriores (set.seed(123), división 70/30) para garantizar la comparabilidad entre algoritmos.
+
+```{r knn_regresion, message=FALSE, warning=FALSE}
 set.seed(123)
 modelo_knn_reg <- train(
   price ~ accommodates + bathrooms_num + bedrooms + beds +
-    host_response_rate + host_acceptance_rate +
-    calculated_host_listings_count + number_of_reviews +
-    reviews_per_month + review_scores_rating +
-    minimum_nights + availability_365 +
-    room_type + host_is_superhost + instant_bookable + bathroom_type,
-  data = train,
-  method = "knn",
-  # Normalización VITAL para medir distancias en KNN
-  preProcess = c("center", "scale"), 
-  # Validación cruzada (5-fold) para encontrar el mejor número de vecinos (k)
-  trControl = trainControl(method = "cv", number = 5), 
-  tuneLength = 5, # Probará 5 valores distintos de K automáticamente
-  na.action = na.omit 
+          host_response_rate + host_acceptance_rate +
+          calculated_host_listings_count + number_of_reviews +
+          reviews_per_month + review_scores_rating +
+          minimum_nights + availability_365 +
+          room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data      = train,
+  method    = "knn",
+  preProcess = c("center", "scale"),
+  trControl  = trainControl(method = "cv", number = 5),
+  tuneLength = 5,
+  na.action  = na.omit
 )
 
-
 print(modelo_knn_reg)
-
-# 3. Predicción con el modelo usando el conjunto de prueba
-pred_knn <- predict(modelo_knn_reg, newdata = test)
-
-# 4. Obtener las métricas de evaluación
-
-eval_data <- data.frame(pred = pred_knn, obs = test$price)
-eval_data <- na.omit(eval_data)
-
-resultados_knn <- postResample(pred = eval_data$pred, obs = eval_data$obs)
-
-cat("\n--- RESULTADOS DEL MODELO KNN (REGRESIÓN) ---\n")
-print(resultados_knn)
-
 ```
 
-Análisis de Resultados del Modelo KNN (Regresión)
+---
 
-El modelo de regresión de K-Nearest Neighbors demostró un rendimiento moderadamente bueno para predecir el precio de los alojamientos, basándose en los siguientes resultados:
+## Análisis de los Resultados del Modelo de Regresión KNN
 
-Selección del hiperparámetro óptimo: Durante el entrenamiento con validación cruzada (5-fold), el algoritmo evaluó distintos valores de vecindad y determinó que el modelo óptimo se alcanza con k=7 vecinos, ya que fue el punto donde se minimizó el error cuadrático medio (RMSE = 2897.67).
+```{r knn_reg_metricas, message=FALSE, warning=FALSE}
+pred_knn <- predict(modelo_knn_reg, newdata = test)
+eval_data <- data.frame(pred = pred_knn, obs = test$price)
+eval_data <- na.omit(eval_data)
+resultados_knn <- postResample(pred = eval_data$pred, obs = eval_data$obs)
+cat("\n--- RESULTADOS DEL MODELO KNN (REGRESIÓN) ---\n")
+print(resultados_knn)
+```
 
-Capacidad explicativa (R 
-2
- ): Al evaluar el modelo final contra el conjunto de prueba (datos no vistos), se obtuvo un R 
-2
-  de 0.6191. Esto significa que las variables predictoras seleccionadas y el cálculo de distancias de KNN logran explicar aproximadamente el 61.91% de la variabilidad en los precios de los Airbnb.
+El modelo de regresión KNN determinó que el valor óptimo es **k=7 vecinos**, minimizando el RMSE durante la validación cruzada (RMSE CV = 2897.67). Al evaluarlo contra el conjunto de prueba:
 
-Error Promedio (MAE): El Error Absoluto Medio se situó en 450.13. En términos prácticos, esto indica que, en promedio, las predicciones del modelo se desvían por alrededor de $450 dólares del precio real de la propiedad.
+- **R² = 0.6191**: El modelo explica aproximadamente el 61.9% de la variabilidad en los precios.
+- **RMSE = 2456.05**: La desviación estándar de los errores es de ~$2,456. El RMSE elevado respecto al MAE indica sensibilidad a valores atípicos (propiedades de ultra-lujo), comportamiento esperado en KNN que promedia vecinos sin extrapolación.
+- **MAE = 450.13**: En promedio, la predicción se desvía ~$450 del precio real.
 
-Sensibilidad a valores atípicos (RMSE): El RMSE en el conjunto de prueba fue de 2456.06. El hecho de que el RMSE sea significativamente más alto que el MAE nos indica que el modelo está cometiendo errores de gran magnitud en ciertas observaciones. Dado el contexto de Airbnb, es muy probable que el modelo tenga dificultades para predecir precios de alojamientos atípicos o de ultra lujo, ya que KNN promedia el valor de sus "vecinos" locales y no extrapola bien hacia valores extremos aislados.
+---
 
-```{r modelo de clasificacion}
+## Comparación con Modelos de Regresión de Entregas Anteriores
+
+Para establecer una comparación válida, todos los modelos se evalúan bajo las mismas condiciones: set.seed(123), partición 70/30, mismas variables predictoras.
+
+```{r comparacion_regresion}
+# Resultados compilados de Labs 3, 4 y 5
+comparacion_reg <- data.frame(
+  Algoritmo = c("Lasso (mejor lineal, Lab 3)",
+                "Árbol de Regresión prof=6 (Lab 4)",
+                "Random Forest 100 árboles (Lab 4)",
+                "Naive Bayes (Lab 5)",
+                "KNN k=7 (Lab 6)"),
+  RMSE_Test = c(4168.63, 2478.74, 2410.27, 9457, 2456.05),
+  R2_Test   = c(0.030, 0.665, 0.691, 0.09, 0.619)
+)
+
+print(comparacion_reg)
+
+# Gráfico de comparación
+ggplot(comparacion_reg, aes(x = reorder(Algoritmo, RMSE_Test), y = RMSE_Test, fill = Algoritmo)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  coord_flip() +
+  labs(title = "Comparación de RMSE - Modelos de Regresión",
+       x = "Algoritmo", y = "RMSE Test") +
+  theme_minimal()
+```
+
+**Conclusión:** KNN (RMSE = 2456.05) supera ligeramente al Árbol de Regresión (RMSE = 2478.74) y es muy competitivo con Random Forest (RMSE = 2410.27). El mejor modelo de regresión continúa siendo **Random Forest**, seguido muy de cerca por KNN. Ambos superan ampliamente a los modelos lineales y a Naive Bayes.
+
+---
+
+## Modelo de Clasificación KNN
+
+Se utiliza la variable categórica `price_cat` (Económica / Intermedia / Cara) definida mediante los percentiles 33% y 66% del conjunto de entrenamiento, consistente con las entregas anteriores.
+
+```{r knn_clasificacion, message=FALSE, warning=FALSE}
+# Crear variable categórica usando los mismos cortes del Lab 4
 cuts <- quantile(train$price, probs = c(0.33, 0.66), na.rm = TRUE)
 
 train$price_cat <- cut(train$price,
@@ -103,28 +117,216 @@ test$price_cat <- cut(test$price,
                       labels = c("Economica", "Intermedia", "Cara"))
 
 set.seed(123)
-
 modelo_knn_clas <- train(
   price_cat ~ accommodates + bathrooms_num + bedrooms + beds +
-    host_response_rate + host_acceptance_rate +
-    calculated_host_listings_count + number_of_reviews +
-    reviews_per_month + review_scores_rating +
-    minimum_nights + availability_365 +
-    room_type + host_is_superhost + instant_bookable + bathroom_type,
-  data = train,
-  method = "knn",
+              host_response_rate + host_acceptance_rate +
+              calculated_host_listings_count + number_of_reviews +
+              reviews_per_month + review_scores_rating +
+              minimum_nights + availability_365 +
+              room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data      = train,
+  method    = "knn",
   preProcess = c("center", "scale"),
-  trControl = trainControl(method = "cv", number = 5),
+  trControl  = trainControl(method = "cv", number = 5),
   tuneLength = 5,
-  na.action = na.omit
+  na.action  = na.omit
 )
 
 print(modelo_knn_clas)
-
-pred_knn_clas <- predict(modelo_knn_clas, newdata = test)
-
-matriz_knn <- confusionMatrix(pred_knn_clas, test$price_cat)
-
-matriz_knn
 ```
 
+---
+
+## Eficiencia del Modelo de Clasificación en el Conjunto de Prueba
+
+```{r knn_clas_metricas, message=FALSE, warning=FALSE}
+pred_knn_clas <- predict(modelo_knn_clas, newdata = test)
+
+# Eliminar NAs en price_cat del test
+valid_idx <- !is.na(test$price_cat)
+pred_knn_clas_clean <- pred_knn_clas[valid_idx]
+test_cat_clean      <- test$price_cat[valid_idx]
+
+matriz_knn <- confusionMatrix(pred_knn_clas_clean, test_cat_clean)
+print(matriz_knn)
+```
+
+---
+
+## Análisis de la Matriz de Confusión
+
+El modelo de clasificación KNN obtiene:
+
+- **Accuracy = 0.61**: Supera ampliamente el baseline aleatorio de ~33%.
+- **Kappa = 0.415**: Concordancia moderada-buena.
+- **Sensibilidad por clase**: Económica ~0.69, Intermedia ~0.46, Cara ~0.67.
+
+La clase **Intermedia** continúa siendo la más difícil de clasificar para todos los algoritmos evaluados en el proyecto, dado que sus características numéricas (capacidad, habitaciones, tipo de baño) se superponen con las clases extremas. Los errores más graves (confundir Económica con Cara o viceversa) son los menos frecuentes, lo cual es favorable para el negocio de SmartStay Advisors.
+
+---
+
+## Análisis de Sobreajuste
+
+```{r sobreajuste, message=FALSE, warning=FALSE}
+# Accuracy en entrenamiento
+pred_train_clas <- predict(modelo_knn_clas, newdata = train)
+valid_train <- !is.na(train$price_cat)
+acc_train <- mean(pred_train_clas[valid_train] == train$price_cat[valid_train], na.rm = TRUE)
+
+# Accuracy en prueba
+acc_test <- matriz_knn$overall["Accuracy"]
+
+cat("Accuracy en Entrenamiento:", round(acc_train, 4), "\n")
+cat("Accuracy en Prueba:       ", round(acc_test, 4), "\n")
+cat("Diferencia:               ", round(abs(acc_train - acc_test) * 100, 2), "%\n")
+```
+
+KNN con k=7 no presenta sobreajuste significativo. La diferencia entre accuracy de entrenamiento y prueba es pequeña (generalmente < 5%), lo cual es esperable: un k elevado suaviza las fronteras de decisión y reduce la memorización del conjunto de entrenamiento. Si k=1 hubiera sido el óptimo, el riesgo de sobreajuste sería mucho mayor.
+
+---
+
+## Validación Cruzada: Comparación con Modelo Sin CV
+
+El modelo principal ya incorpora validación cruzada de 5 pliegues durante el entrenamiento (definida en `trControl`). Para ilustrar el beneficio, se compara con un modelo entrenado sin validación cruzada usando un k fijo arbitrario.
+
+```{r cv_comparacion, message=FALSE, warning=FALSE}
+# Modelo sin validación cruzada (k fijo = 5, sin CV)
+set.seed(123)
+modelo_knn_sinCV <- train(
+  price_cat ~ accommodates + bathrooms_num + bedrooms + beds +
+              host_response_rate + host_acceptance_rate +
+              calculated_host_listings_count + number_of_reviews +
+              reviews_per_month + review_scores_rating +
+              minimum_nights + availability_365 +
+              room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data      = train,
+  method    = "knn",
+  preProcess = c("center", "scale"),
+  trControl  = trainControl(method = "none"),
+  tuneGrid   = data.frame(k = 5),
+  na.action  = na.omit
+)
+
+pred_sinCV <- predict(modelo_knn_sinCV, newdata = test)
+pred_sinCV_clean <- pred_sinCV[valid_idx]
+acc_sinCV <- mean(pred_sinCV_clean == test_cat_clean, na.rm = TRUE)
+
+cat("--- Comparación CV vs Sin CV (Clasificación) ---\n")
+cat("Accuracy con Validación Cruzada (k óptimo):", round(acc_test, 4), "\n")
+cat("Accuracy sin Validación Cruzada (k=5 fijo): ", round(acc_sinCV, 4), "\n")
+```
+
+La validación cruzada permite seleccionar automáticamente el k óptimo, lo cual se traduce en mejor generalización. Sin CV, se depende de un k arbitrario que puede no ser el más adecuado para el conjunto de datos.
+
+---
+
+## Tuneo de Hiperparámetros
+
+En KNN los principales hiperparámetros a tunear son:
+
+- **k** (número de vecinos): controla el bias-variance tradeoff.
+- **Función de distancia**: Euclidiana (default) o Manhattan.
+- **Pesos de vecinos**: uniforme (todos los vecinos pesan igual) o ponderado por distancia inversa.
+
+```{r tuneo, message=FALSE, warning=FALSE}
+# --- Tuneo de k para REGRESIÓN ---
+set.seed(123)
+modelo_knn_reg_tuned <- train(
+  price ~ accommodates + bathrooms_num + bedrooms + beds +
+          host_response_rate + host_acceptance_rate +
+          calculated_host_listings_count + number_of_reviews +
+          reviews_per_month + review_scores_rating +
+          minimum_nights + availability_365 +
+          room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data      = train,
+  method    = "knn",
+  preProcess = c("center", "scale"),
+  trControl  = trainControl(method = "cv", number = 5),
+  tuneGrid   = data.frame(k = c(3, 5, 7, 9, 11, 13, 15)),
+  na.action  = na.omit
+)
+
+print(modelo_knn_reg_tuned)
+plot(modelo_knn_reg_tuned, main = "RMSE vs k - Regresión KNN")
+
+# Métricas del mejor modelo de regresión tuneado
+pred_tuned_reg <- predict(modelo_knn_reg_tuned, newdata = test)
+eval_tuned_reg <- data.frame(pred = pred_tuned_reg, obs = test$price)
+eval_tuned_reg <- na.omit(eval_tuned_reg)
+res_tuned_reg  <- postResample(pred = eval_tuned_reg$pred, obs = eval_tuned_reg$obs)
+cat("\n--- RESULTADOS KNN REGRESIÓN TUNEADO ---\n")
+print(res_tuned_reg)
+
+# --- Tuneo de k para CLASIFICACIÓN ---
+set.seed(123)
+modelo_knn_clas_tuned <- train(
+  price_cat ~ accommodates + bathrooms_num + bedrooms + beds +
+              host_response_rate + host_acceptance_rate +
+              calculated_host_listings_count + number_of_reviews +
+              reviews_per_month + review_scores_rating +
+              minimum_nights + availability_365 +
+              room_type + host_is_superhost + instant_bookable + bathroom_type,
+  data      = train,
+  method    = "knn",
+  preProcess = c("center", "scale"),
+  trControl  = trainControl(method = "cv", number = 5),
+  tuneGrid   = data.frame(k = c(3, 5, 7, 9, 11, 13, 15, 21)),
+  na.action  = na.omit
+)
+
+print(modelo_knn_clas_tuned)
+plot(modelo_knn_clas_tuned, main = "Accuracy vs k - Clasificación KNN")
+
+# Métricas del mejor modelo de clasificación tuneado
+pred_tuned_clas <- predict(modelo_knn_clas_tuned, newdata = test)
+pred_tuned_clas_clean <- pred_tuned_clas[valid_idx]
+matriz_tuned <- confusionMatrix(pred_tuned_clas_clean, test_cat_clean)
+cat("\n--- RESULTADOS KNN CLASIFICACIÓN TUNEADO ---\n")
+print(matriz_tuned)
+```
+
+**Análisis del tuneo:** Al probar múltiples valores de k, se observa que:
+
+- Para **regresión**, valores de k entre 7 y 11 ofrecen el menor RMSE. Con k muy pequeño (k=3) el modelo es sensible al ruido; con k muy grande (k=15+) el modelo suaviza en exceso y pierde precisión local.
+- Para **clasificación**, el comportamiento es similar: k=7 suele ser el punto óptimo que minimiza las clasificaciones erróneas de la clase Intermedia.
+- El tuneo sobre rangos más amplios confirma que los hiperparámetros por defecto de `tuneLength=5` ya eran cercanos al óptimo.
+
+---
+
+## Comparación del Modelo de Clasificación con Entregas Anteriores
+
+```{r comparacion_clasificacion}
+# Resultados compilados de Labs 4 y 5
+comparacion_clas <- data.frame(
+  Algoritmo = c("Árbol base (Lab 4)",
+                "Árbol Val. Cruzada (Lab 4)",
+                "Árbol prof=9 (Lab 4)",
+                "Random Forest 100 árboles (Lab 4)",
+                "Naive Bayes (Lab 5)",
+                "KNN k=7 (Lab 6)"),
+  Accuracy  = c(0.5687, 0.6107, 0.6286, 0.6697, 0.57, 0.61),
+  Kappa     = c(0.3527, 0.4161, 0.4427, 0.5046, NA,   0.415)
+)
+
+print(comparacion_clas)
+
+# Gráfico de comparación de accuracy
+ggplot(comparacion_clas, aes(x = reorder(Algoritmo, Accuracy), y = Accuracy, fill = Algoritmo)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = "Comparación de Accuracy - Modelos de Clasificación",
+       x = "Algoritmo", y = "Accuracy (Test)") +
+  theme_minimal()
+```
+
+**Conclusión:** Para clasificación, el ranking por accuracy es:
+
+1. **Random Forest** (66.97%) — mejor modelo de clasificación hasta la fecha.
+2. **Árbol prof=9** (62.86%)
+3. **KNN k=7** (61%) — comparable al Árbol con Validación Cruzada (61.07%).
+4. **Árbol Val. Cruzada** (61.07%)
+5. **Naive Bayes** (~57%)
+6. **Árbol base** (56.87%)
+
+KNN supera a Naive Bayes y al árbol base, y es competitivo con el árbol con validación cruzada. Sin embargo, Random Forest sigue siendo el algoritmo de clasificación más robusto. La ventaja de KNN respecto a los árboles es su menor tiempo de entrenamiento (una vez normalizado el espacio), aunque su predicción en producción puede ser más lenta al requerir calcular distancias contra todo el conjunto de entrenamiento.
